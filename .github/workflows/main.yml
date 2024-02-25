@@ -1,45 +1,42 @@
-name: CI
+name: Run RDP server with ngrok
 
-on:
-  push:
-  workflow_dispatch:
+on: [push]
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
+
     steps:
-      - name: Download ngrok
-        run: Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-stable-windows-amd64.zip -OutFile ngrok.zip
+    - name: Checkout repository
+      uses: actions/checkout@v2
 
-      - name: Extract ngrok
-        run: Expand-Archive ngrok.zip
+    - name: Install xrdp and configure RDP
+      run: |
+        sudo apt update
+        sudo apt install -y xrdp
+        sudo apt install -y xorgxrdp
+        echo xfce4-session > ~/.xsession
+        sudo service xrdp restart
+        sudo adduser rdpuser --gecos "" --disabled-password
+        echo "rdpuser:password" | sudo chpasswd
 
-      - name: Authenticate with ngrok
-        run: .\ngrok\ngrok.exe authtoken $Env:NGROK_AUTH_TOKEN
-        env:
-          NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
+    - name: Set up noVNC and ngrok
+      uses: actions/setup-node@v2
+      with:
+        node-version: '14'
 
-      - name: Enable Remote Desktop
-        run: |
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
-          Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "P@ssw0rd!" -Force)
+    - name: Install dependencies
+      run: |
+        npm install novnc
+        wget https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-amd64.zip
+        unzip ngrok-stable-linux-amd64.zip
 
-      - name: Install VNC server and noVNC
-        run: |
-          choco install -y tightvnc
-          git clone https://github.com/novnc/noVNC.git
-          cd noVNC
-          npm install
+    - name: Start noVNC server
+      run: |
+        cd $GITHUB_WORKSPACE
+        npx --no-install novnc --listen 8080 &
 
-      - name: Start VNC Server
-        run: Start-Process -FilePath "C:\Program Files\TightVNC\tvnserver.exe" -ArgumentList "-controlapp -notoolbar" -NoNewWindow -Wait
-
-      - name: Create ngrok tunnel to VNC server
-        run: .\ngrok\ngrok.exe tcp --region=in 5900
-
-      - name: Run noVNC
-        run: |
-          cd noVNC
-          ./utils/launch.sh --vnc localhost:5900
+    - name: Expose port 3389 (RDP) with ngrok
+      run: |
+        ./ngrok authtoken $NGROK_AUTH_TOKEN
+        ./ngrok tcp --region=in 3389
