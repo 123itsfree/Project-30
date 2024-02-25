@@ -10,17 +10,36 @@ jobs:
     steps:
     - name: Download ngrok
       run: Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-stable-windows-amd64.zip -OutFile ngrok.zip
+
     - name: Extract ngrok
       run: Expand-Archive ngrok.zip
+
     - name: Authenticate with ngrok
       run: .\ngrok\ngrok.exe authtoken $Env:NGROK_AUTH_TOKEN
       env:
         NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
+
     - name: Enable Remote Desktop
       run: |
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
         Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "P@ssw0rd!" -Force)
-    - name: Create ngrok tunnel to remote desktop
-      run: .\ngrok\ngrok.exe tcp --region=in 3389
+
+    - name: Install VNC server and noVNC
+      run: |
+        choco install -y tightvnc
+        git clone https://github.com/novnc/noVNC.git
+        cd noVNC
+        npm install
+
+    - name: Start VNC Server
+      run: vncserver :1 -geometry 1024x768 -depth 24 && sleep 10
+
+    - name: Create ngrok tunnel to VNC server
+      run: .\ngrok\ngrok.exe tcp --region=in 5901
+
+    - name: Run noVNC
+      run: |
+        cd noVNC
+        ./utils/launch.sh --vnc localhost:5901
