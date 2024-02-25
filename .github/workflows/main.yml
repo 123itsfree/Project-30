@@ -34,8 +34,7 @@ jobs:
           npm install
 
       - name: Start VNC Server
-        run: |
-          "C:\Program Files\TightVNC\tvnserver.exe" -controlapp -notoolbar
+        run: Start-Process -FilePath "C:\Program Files\TightVNC\tvnserver.exe" -ArgumentList "-controlapp -notoolbar" -NoNewWindow -Wait
 
       - name: Create ngrok tunnel to VNC server
         run: .\ngrok\ngrok.exe tcp --region=in 5900
