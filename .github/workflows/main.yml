@@ -1,26 +1,33 @@
-name: CI
+name: Web Terminal
 
 on:
-  push:
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
+    
     steps:
     - name: Download ngrok
-      run: Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-stable-windows-amd64.zip -OutFile ngrok.zip
-    - name: Extract ngrok
-      run: Expand-Archive ngrok.zip
+      run: |
+        wget https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-amd64.zip -O ngrok.zip
+        unzip ngrok.zip
+        
     - name: Authenticate with ngrok
-      run: .\ngrok\ngrok.exe authtoken $Env:NGROK_AUTH_TOKEN
+      run: ./ngrok authtoken $NGROK_AUTH_TOKEN
       env:
         NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
-    - name: Enable Remote Desktop
+        
+    - name: Install dependencies
+      run: sudo apt-get install -y wget
+      
+    - name: Install ttyd
       run: |
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
-        Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "P@ssw0rd!" -Force)
-    - name: Create ngrok tunnel to remote desktop
-      run: .\ngrok\ngrok.exe tcp --region=in 3389
+        wget https://github.com/tsl0922/ttyd/releases/download/1.6.3/ttyd.x86_64 -O ttyd
+        chmod +x ttyd
+        
+    - name: Start ttyd session
+      run: ./ttyd bash
+      
+    - name: Create ngrok tunnel
+      run: ./ngrok http 7681
